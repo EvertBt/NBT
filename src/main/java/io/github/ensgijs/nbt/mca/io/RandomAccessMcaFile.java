@@ -612,6 +612,19 @@ public class RandomAccessMcaFile<T extends ChunkBase> implements Closeable, Iter
 
     /**
      * Writes the given chunks.
+     * @param compressionType The compression type to use to write the chunks.
+     * @param chunks not null and all chunks must exist within bounds of this region file.
+     * @see #removeChunk
+     */
+    @SafeVarargs
+    public final void write(CompressionType compressionType, T... chunks) throws IOException {
+        for (T chunk : chunks) {
+            write(chunk, compressionType);
+        }
+    }
+
+    /**
+     * Writes the given chunks.
      * @param chunks not null and all chunks must exist within bounds of this region file.
      * @see #removeChunk
      */
@@ -623,12 +636,25 @@ public class RandomAccessMcaFile<T extends ChunkBase> implements Closeable, Iter
     }
 
     /**
-     * Writes the given chunk.
+     * Writes the given chunk with {@link CompressionType#ZLIB}
      * @param chunk not null and chunk must exist within bounds of this region file.
      * @see #removeChunk
      */
-    public void write(T chunk) throws IOException {
+    public final void write(T chunk) throws IOException {
+        write(chunk, CompressionType.ZLIB);
+    }
+
+    /**
+     * Writes the given chunk.
+     * @param chunk not null and chunk must exist within bounds of this region file.
+     * @param compressionType The compression type to compress the chunk with.
+     * @see #removeChunk
+     */
+    public void write(T chunk, CompressionType compressionType) throws IOException {
+
         ArgValidator.requireValue(chunk);
+        ArgValidator.requireValue(compressionType);
+
         if (isReadOnly)
             throw new IOException("File was opened in read-only mode.");
         if (chunk.getChunkX() == ChunkBase.NO_CHUNK_COORD_SENTINEL || chunk.getChunkZ() == ChunkBase.NO_CHUNK_COORD_SENTINEL) {
@@ -658,7 +684,7 @@ public class RandomAccessMcaFile<T extends ChunkBase> implements Closeable, Iter
 
             try (Stopwatch.LapToken lap2 = chunkSerializationStopwatch.startLap()) {
                 baos = new ByteArrayOutputStream(Math.min(2, oldSectorSize) * 4096);
-                new BinaryNbtSerializer(CompressionType.ZLIB).toStream(
+                new BinaryNbtSerializer(compressionType).toStream(
                         new NamedTag(null, isAutoUpdateHandelOnWrite() ? chunk.updateHandle() : chunk.getHandle()), baos);
             }
             // Note 'totalBytes' is count 4 larger than the value written at the chunk sector offset because it includes the byte size data too
@@ -679,7 +705,7 @@ public class RandomAccessMcaFile<T extends ChunkBase> implements Closeable, Iter
             }
             writeToSector.seekTo(raf);
             raf.writeInt(totalBytes - 4);  // don't count the int we are writing here in the byte size
-            raf.write(CompressionType.ZLIB.getID());
+            raf.write(compressionType.getID());
             raf.write(baos.toByteArray());
             chunkSectors[index] = writeToSector.pack();
             chunkTimestamps[index] = chunk.getLastMCAUpdate();

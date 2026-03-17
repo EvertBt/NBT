@@ -6,6 +6,7 @@ import io.github.ensgijs.nbt.mca.McaFileBase;
 import io.github.ensgijs.nbt.mca.McaPoiFile;
 import io.github.ensgijs.nbt.mca.McaRegionFile;
 import io.github.ensgijs.nbt.mca.util.IntPointXZ;
+import io.github.ensgijs.nbt.util.ArgValidator;
 
 import java.io.File;
 import java.io.IOException;
@@ -15,6 +16,7 @@ import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Objects;
 import java.util.function.BiFunction;
 import java.util.function.Predicate;
 import java.util.regex.Matcher;
@@ -248,7 +250,8 @@ public final class McaFileHelpers {
 	//<editor-fold desc="Writers">
 
 	/**
-	 * Calls {@link McaFileHelpers#write(McaFileBase, File, boolean)} without changing the timestamps.
+	 * Uses {@link CompressionType#ZLIB}
+	 * <br>Calls {@link McaFileHelpers#write(McaFileBase, File, boolean)} without changing the timestamps.
 	 * @see McaFileHelpers#write(McaFileBase, File, boolean)
 	 * @param mcaFile The data of the MCA file to write.
 	 * @param file The file to write to.
@@ -260,7 +263,8 @@ public final class McaFileHelpers {
 	}
 
 	/**
-	 * Calls {@link McaFileHelpers#write(McaFileBase, File, boolean)} without changing the timestamps.
+	 * Uses {@link CompressionType#ZLIB}
+	 * <br>Calls {@link McaFileHelpers#write(McaFileBase, File, boolean)} without changing the timestamps.
 	 * @see McaFileHelpers#write(McaFileBase, File, boolean)
 	 * @param mcaFile The data of the MCA file to write.
 	 * @param file The file to write to.
@@ -272,7 +276,8 @@ public final class McaFileHelpers {
 	}
 
 	/**
-	 * Calls {@link McaFileHelpers#write(McaFileBase, File, boolean)} without changing the timestamps.
+	 * Uses {@link CompressionType#ZLIB}
+	 * <br>Calls {@link McaFileHelpers#write(McaFileBase, File, boolean)} without changing the timestamps.
 	 * @see McaFileHelpers#write(McaFileBase, File, boolean)
 	 * @param mcaFile The data of the MCA file to write.
 	 * @param path The file to write to.
@@ -284,6 +289,7 @@ public final class McaFileHelpers {
 	}
 
 	/**
+	 * Uses {@link CompressionType#ZLIB}
 	 * @see McaFileHelpers#write(McaFileBase, File, boolean)
 	 * @param mcaFile The data of the MCA file to write.
 	 * @param path The file to write to.
@@ -296,6 +302,7 @@ public final class McaFileHelpers {
 	}
 
 	/**
+	 * Uses {@link CompressionType#ZLIB}
 	 * @see McaFileHelpers#write(McaFileBase, File, boolean)
 	 * @param mcaFile The data of the MCA file to write.
 	 * @param file The file to write to.
@@ -308,10 +315,8 @@ public final class McaFileHelpers {
 	}
 
 	/**
-	 * Writes an {@code McaFileBase} object to disk. It optionally adjusts the timestamps
-	 * when the file was last saved to the current date and time or leaves them at
-	 * the value set by either loading an already existing MCA file or setting them manually.<br>
-	 * If the file already exists, it is completely overwritten by the new file (no modification).
+	 * Uses {@link CompressionType#ZLIB}
+	 * @see McaFileHelpers#write(McaFileBase, File, CompressionType, boolean)
 	 * @param mcaFile The data of the MCA file to write.
 	 * @param file The file to write to.
 	 * @param changeLastUpdate Whether to adjust the timestamps of when the file was saved.
@@ -319,6 +324,24 @@ public final class McaFileHelpers {
 	 * @throws IOException If something goes wrong during serialization.
 	 */
 	public static int write(McaFileBase<?> mcaFile, File file, boolean changeLastUpdate) throws IOException {
+		return write(mcaFile, file, CompressionType.ZLIB, changeLastUpdate);
+	}
+
+	/**
+	 * Writes an {@code McaFileBase} object to disk. It optionally adjusts the timestamps
+	 * when the file was last saved to the current date and time or leaves them at
+	 * the value set by either loading an already existing MCA file or setting them manually.<br>
+	 * If the file already exists, it is completely overwritten by the new file (no modification).
+	 * @param mcaFile The data of the MCA file to write.
+	 * @param file The file to write to.
+	 * @param compressionType The compression type to compress chunks with.
+	 * @param changeLastUpdate Whether to adjust the timestamps of when the file was saved.
+	 * @return The amount of chunks written to the file.
+	 * @throws IOException If something goes wrong during serialization.
+	 */
+	public static int write(McaFileBase<?> mcaFile, File file, CompressionType compressionType, boolean changeLastUpdate) throws IOException {
+		ArgValidator.requireValue(compressionType);
+
 		File to = file;
 		if (file.exists()) {
 			to = File.createTempFile(to.getName(), null);
@@ -326,7 +349,7 @@ public final class McaFileHelpers {
 		}
 		int chunks;
 		try (RandomAccessFile raf = new RandomAccessFile(to, "rw")) {
-			chunks = mcaFile.serialize(raf, CompressionType.ZLIB, changeLastUpdate);
+			chunks = mcaFile.serialize(raf, compressionType, changeLastUpdate);
 		}
 
 		// TODO(bug): This logic is flawed - why would we ever want an empty region file?

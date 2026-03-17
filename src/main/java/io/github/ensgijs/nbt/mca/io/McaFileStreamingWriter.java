@@ -47,7 +47,13 @@ public class McaFileStreamingWriter implements Closeable {
     }
 
     public void write(ChunkBase chunk) throws IOException {
+        write(chunk, CompressionType.ZLIB);
+    }
+
+    public void write(ChunkBase chunk, CompressionType compressionType) throws IOException {
         ArgValidator.requireValue(chunk);
+        ArgValidator.requireValue(compressionType);
+
         if (!fileInitialized) {
             try (Stopwatch.LapToken lap = fileInitializationStopwatch.startLap()) {
                 raf.setLength(0);
@@ -72,7 +78,7 @@ public class McaFileStreamingWriter implements Closeable {
 
             int bytesWritten;
             try (Stopwatch.LapToken lap2 = chunkSerializationStopwatch.startLap()) {
-                bytesWritten = chunk.serialize(raf, chunk.getChunkX(), chunk.getChunkZ(), CompressionType.ZLIB, true);
+                bytesWritten = chunk.serialize(raf, chunk.getChunkX(), chunk.getChunkZ(), compressionType, true);
             }
 
             // compute the count of 4kb sectors the chunk data occupies
