@@ -24,18 +24,19 @@ import java.util.zip.ZipEntry;
 import java.util.zip.ZipFile;
 
 public class DataVersionTest extends McaTestCase {
-    private static final Pattern ALLOWED_ENUM_DESCRIPTION_PATTERN = Pattern.compile("^(?:FINAL|\\d{2}w\\d{2}[a-z]|CT\\d+[a-z]?|(?:XS|PRE|RC)\\d+|)");
+    private static final Pattern ALLOWED_ENUM_DESCRIPTION_PATTERN = Pattern.compile("^(?:FINAL|\\d{2}w\\d{2}[a-z]|CT\\d+[a-z]?|(?:XS|PRE|RC|SNAPSHOT)-?\\d+|)");
 
     public void testEnumNamesMatchVersionInformation() {
         for (DataVersion dv : DataVersion.values()) {
             if (dv.id() != 0) {
-                StringBuilder sb = new StringBuilder("JAVA_1_");
+                StringBuilder sb = new StringBuilder("JAVA_");
+                sb.append(dv.major()).append('_');
                 sb.append(dv.minor()).append('_');
                 if (dv.isFullRelease()) {
                     sb.append(dv.patch());
                 } else {
-                    if (dv.patch() > 0) sb.append(dv.patch()).append('_');
-                    sb.append(dv.getBuildDescription().toUpperCase());
+                    if (dv.major() > 1 || dv.patch() > 0) sb.append(dv.patch()).append('_');
+                    sb.append(dv.getBuildDescription().toUpperCase().replaceAll("-|\\s", ""));
                 }
                 assertEquals(sb.toString(), dv.name());
                 assertTrue("Build description of " + dv.name() + " does not follow convention!",
@@ -141,10 +142,11 @@ public class DataVersionTest extends McaTestCase {
             return;
         }
         // 1: weekly
-        // 2: minor
-        // 3: patch?
-        // 4: descriptor? (pre#, rc#, etc)
-        final Pattern vanillaVersionPattern = Pattern.compile("^(?:(\\d{2}w\\d{2}[a-z])|1[.](\\d+)(?:[.](\\d+))?(?:-(.+))?)$");
+        // 2: major (always "1" up to 1.21.* - 2 digit year after 26.1)
+        // 3: minor?
+        // 4: patch?
+        // 5: descriptor? (pre-#, rc-#, snapshot-#, etc)
+        final Pattern vanillaVersionPattern = Pattern.compile("^(?:(\\d{2}w\\d{2}[a-z])|(\\d+)(?:[.](\\d+))?(?:[.](\\d+))?(?:-(.+))?)$");
         final var isSaneVersionName = vanillaVersionPattern.asPredicate();
         final String mcVerRootStr = minecraftVersionsDirectory.toFile().getAbsolutePath();
 
@@ -175,6 +177,9 @@ public class DataVersionTest extends McaTestCase {
             Matcher m = vanillaVersionPattern.matcher(version);
             if (!m.matches())
                 continue;
+            if ("26w14a".equals(version)) {  // out of order data version usage for 26.1.1 april fools weekly
+                continue;
+            }
             if (Paths.get(mcVerRootStr, version).toFile().isDirectory()) {
                 DataVersion dv = DataVersion.find(version);
                 if (dv == null) {
@@ -192,14 +197,14 @@ public class DataVersionTest extends McaTestCase {
                     }
                     NamedTag versionInfo = new TextNbtDeserializer().fromStream(zip.getInputStream(ze));
                     int dataVersion = ((CompoundTag) versionInfo.getTag()).getInt("world_version");
-                    StringBuilder sb = new StringBuilder("JAVA_1_");
-                    StringBuilder sbArgs = new StringBuilder("(").append(dataVersion);
+                    StringBuilder sb = new StringBuilder("JAVA_");
+                    StringBuilder sbArgs = new StringBuilder("(").append(dataVersion).append(", ").append(m.group(2));
                     String comment = "";
 
                     if (m.group(1) != null) {  // weekly
                         DataVersion nearest = DataVersion.bestFor(dataVersion);
                         if (nearest != null) {
-                            sb.append(nearest.minor()).append('_').append(nearest.patch());
+                            sb.append(nearest.major()).append('_').append(nearest.minor()).append('_').append(nearest.patch());
                             sbArgs.append(", ").append(nearest.minor()).append(", ").append(nearest.patch());
                             comment += "  // TODO: verify minor and patch versions are correct";
                         } else {
@@ -209,19 +214,18 @@ public class DataVersionTest extends McaTestCase {
                         sb.append('_').append(m.group(1).toUpperCase());
                         sbArgs.append(", ").append('"').append(m.group(1)).append('"');
                     } else {
-                        sb.append(m.group(2));
-                        sbArgs.append(", ").append(m.group(2));
-                        sb.append('_');
-                        if (m.group(3) != null) {
-                            sb.append(m.group(3));
-                            sbArgs.append(", ").append(m.group(3));
+                        sb.append(m.group(2)).append('_').append(m.group(3)).append('_');
+                        sbArgs.append(", ").append(m.group(3));
+                        if (m.group(4) != null) {
+                            sb.append(m.group(4));
+                            sbArgs.append(", ").append(m.group(4));
                         } else {
                             sb.append(0);
                             sbArgs.append(", ").append(0);
                         }
-                        if (m.group(4) != null) {  // RC, PRE, etc
-                            sb.append('_').append(m.group(4).toUpperCase());
-                            sbArgs.append(", ").append('"').append(m.group(4).toUpperCase()).append('"');
+                        if (m.group(5) != null) {  // RC, PRE, etc
+                            sb.append('_').append(m.group(5).toUpperCase().replaceAll("-|\\s", ""));
+                            sbArgs.append(", ").append('"').append(m.group(5).toUpperCase()).append('"');
                         }
                     }
                     sbArgs.append("),");
